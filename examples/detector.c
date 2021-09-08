@@ -620,6 +620,272 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     }
 }
 
+int count_lines(char *filename) {
+    FILE *fp;
+    int count = 0;
+    char c;
+    fp = fopen(filename, "r");
+
+    if (fp == NULL) {
+        printf("Could not open file %s", filename);
+        return 0;
+    }
+
+    for (c = getc(fp); c != EOF; c = getc(fp))
+        if (c == '\n')
+            count++;
+
+    fclose(fp);
+
+    return count + 1;
+}
+
+void test_detector_new_onefile(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen)
+{
+    list *options = read_data_cfg(datacfg);
+    char *name_list = option_find_str(options, "names", "data/names.list");
+    char **names = get_labels(name_list);
+
+    image **alphabet = load_alphabet();
+    network *net = load_network(cfgfile, weightfile, 0);
+    set_batch_network(net, 1);
+    srand(2222222);
+
+    double time;
+    char buff[256];
+    char *input = buff;
+    float nms=.45;
+
+    int queue_len = count_lines(filename);
+    char queue[queue_len][256];
+    //ONE FILE
+    //read and queue
+    if(filename){
+            FILE *path;
+            path = fopen(filename, "r");
+            char buffer[256];
+            int i = 0;
+            while (fgets(buffer, 255, path)) {
+                buffer[strcspn(buffer, "\n")] = 0;
+                strncpy(queue[i], buffer, 256);
+                i++;
+            }
+        } else {
+            printf("Enter Image Path: ");
+            fflush(stdout);
+            input = fgets(input, 256, stdin);
+            if(!input) return;
+            strtok(input, "\n");
+        }
+    //detection
+    int i = 0;
+    char p[256];
+    while(i < queue_len){
+        strncpy(input, queue[i], 256);
+        image im = load_image_color(input,0,0);
+        image sized = letterbox_image(im, net->w, net->h);
+        layer l = net->layers[net->n-1];
+
+        float *X = sized.data;
+        time=what_time_is_it_now();
+        network_predict(net, X);
+        printf("%s: Predicted in %f seconds.\n", input, what_time_is_it_now()-time);
+        int nboxes = 0;
+        detection *dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes);
+
+        if (nms) do_nms_sort(dets, nboxes, l.classes, nms);
+        draw_detections(im, dets, nboxes, thresh, names, alphabet, l.classes);
+        free_detections(dets, nboxes);
+        
+        if(outfile){
+            save_image(im, outfile);
+        }
+        else{
+            char *num;
+            if (asprintf(&num, "%d", i) == -1) {
+                perror("asprintf");
+            } else {
+                strcat(strcpy(p, "predictions"), num);
+                free(num);
+            }
+            save_image(im, p);
+        }
+        free_image(im);
+        free_image(sized);
+        i++;
+    }
+}
+
+void test_detector_new_twofiles(char *datacfg, char *cfgfile, char *weightfile, char *filename1, char *filename2, float thresh, float hier_thresh, char *outfile, int fullscreen) {
+    list *options = read_data_cfg(datacfg);
+    char *name_list = option_find_str(options, "names", "data/names.list");
+    char **names = get_labels(name_list);
+
+    image **alphabet = load_alphabet();
+    network *net = load_network(cfgfile, weightfile, 0);
+    set_batch_network(net, 1);
+    srand(2222222);
+
+    double time;
+    char buff[256];
+    char *input = buff;
+    float nms=.45;
+
+    int l1 = count_lines(filename1);
+    int l2 = count_lines(filename2);
+    int queue_len = l1 > l2 ? l1 : l2;
+    char queue[2][queue_len][256];
+    //read and queue
+    if (filename1 || filename2) {
+        FILE *path1;
+        FILE *path2;
+        path1 = fopen(filename1, "r");
+        path2 = fopen(filename2, "r");
+        char buffer[256];
+        int i = 0;
+        while (fgets(buffer, 255, path1)) {
+            buffer[strcspn(buffer, "\n")] = 0;
+            strncpy(queue[0][i], buffer, 256);
+            i++;
+        }
+        while (fgets(buffer, 255, path2)) {
+            buffer[strcspn(buffer, "\n")] = 0;
+            strncpy(queue[1][i], buffer, 256);
+            i++;
+        }
+    } else {
+        printf("Enter Image Path: ");
+        fflush(stdout);
+        input = fgets(input, 256, stdin);
+        if(!input) return;
+        strtok(input, "\n");
+    }
+    //detection
+    int i = 0, j = 0;
+    char p[256];
+    while(i < queue_len) {
+        strncpy(input, queue[j][i], 256);
+        image im = load_image_color(input,0,0);
+        image sized = letterbox_image(im, net->w, net->h);
+        layer l = net->layers[net->n-1];
+
+        float *X = sized.data;
+        time=what_time_is_it_now();
+        network_predict(net, X);
+        printf("%s: Predicted in %f seconds.\n", input, what_time_is_it_now()-time);
+        int nboxes = 0;
+        detection *dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes);
+
+        if (nms) do_nms_sort(dets, nboxes, l.classes, nms);
+        draw_detections(im, dets, nboxes, thresh, names, alphabet, l.classes);
+        free_detections(dets, nboxes);
+        
+        if(outfile){
+            save_image(im, outfile);
+        }
+        else{
+            char *num1;
+            char *num2;
+            if (asprintf(&num1, "%d", i) == -1 && asprintf(&num2, "%d", j) == -1) {
+                perror("asprintf");
+            } else {
+                strcat(strcat(strcpy(p, "predictions_"), num2), num1);
+                free(num1);
+                free(num2);
+            }
+            save_image(im, p);
+        }
+        printf("%s", "hey0");
+        free_image(im);
+        free_image(sized);
+        printf("%s", "hey1");
+        if (j == 0) j++;
+        else {
+            j--;
+            i++;
+        }
+        printf("%s", "hey2");
+    }
+}
+
+void test_detector_3(char *datacfg, char *cfgfile, char *weightfile, char *filename1, char *filename2, float thresh, float hier_thresh, char *outfile1, char *outfile2, int fullscreen) {
+    char buff[256];
+    char *input = buff;
+
+    int l1 = count_lines(filename1);
+    int l2 = count_lines(filename2);
+    int queue_len = l1 > l2 ? l1 : l2;
+    char queue[2][queue_len][256];
+    //read and queue
+    if (filename1 || filename2) {
+        FILE *path1;
+        FILE *path2;
+        path1 = fopen(filename1, "r");
+        path2 = fopen(filename2, "r");
+        char buffer[256];
+        int i = 0;
+        while (fgets(buffer, 255, path1)) {
+            buffer[strcspn(buffer, "\n")] = 0;
+            strncpy(queue[0][i], buffer, 256);
+            i++;
+        }
+        while (fgets(buffer, 255, path2)) {
+            buffer[strcspn(buffer, "\n")] = 0;
+            strncpy(queue[1][i], buffer, 256);
+            i++;
+        }
+    } else {
+        printf("Enter Image Path: ");
+        fflush(stdout);
+        input = fgets(input, 256, stdin);
+        if(!input) return;
+        strtok(input, "\n");
+    }
+    int i = 0;
+    while (i < queue_len) {
+        test_detector(datacfg, cfgfile, weightfile, queue[0][i], thresh, hier_thresh, outfile1, fullscreen);
+        test_detector(datacfg, cfgfile, weightfile, queue[1][i], thresh, hier_thresh, outfile2, fullscreen);
+        i++;
+    }
+    
+}
+
+void directory_detector(char *datacfg, char *cfgfile, char *weightfile, char *path, float thresh, float hier_thresh, char *outfile, int fullscreen)
+{
+    printf("6");
+    struct dirent *de;
+    DIR *dr = opendir(path);
+    if (dr == NULL) {
+        printf("Could not open current directory");
+        return;
+    }
+    while ((de = readdir(dr)) != NULL) {
+        printf("7");
+        if ((de->d_name[0] == '.') || ((de->d_name[0] == '.') && (de->d_name[1] == '.')))
+            continue;
+        char filename[25];
+        filename[0] = 'i';
+        filename[1] = 'm';
+        filename[2] = 'a';
+        filename[3] = 'g';
+        filename[4] = 'e';
+        filename[5] = 's';
+        filename[6] = '/';
+        size_t len = strlen(de->d_name);
+        int i = 0;
+        for (i = 0; i < len; i++)
+            filename[i+7] = de->d_name[i];
+        test_detector(datacfg, cfgfile, weightfile, filename, thresh, hier_thresh, outfile, fullscreen);
+        break;
+        printf("8");
+        //test_detector(datacfg, cfgfile, weightfile, de->d_name, thresh, hier_thresh, outfile, fullscreen);
+        continue;
+        printf("9");
+    }
+    closedir(dr);
+    return;
+}
+
 /*
 void censor_detector(char *datacfg, char *cfgfile, char *weightfile, int cam_index, const char *filename, int class, float thresh, int skip)
 {

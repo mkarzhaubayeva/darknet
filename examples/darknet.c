@@ -6,6 +6,10 @@
 
 extern void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filename, int top);
 extern void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen);
+extern void test_detector_new_onefile(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen);
+extern void test_detector_new_twofiles(char *datacfg, char *cfgfile, char *weightfile, char *filename1, char *filename2, float thresh, float hier_thresh, char *outfile, int fullscreen);
+extern void test_detector_3(char *datacfg, char *cfgfile, char *weightfile, char *filename1, char *filename2, float thresh, float hier_thresh, char *outfile1, char *outfile2, int fullscreen);
+extern void directory_detector(char *datacfg, char *cfgfile, char *weightfile, char *path, float thresh, float hier_thresh, char *outfile, int fullscreen);
 extern void run_yolo(int argc, char **argv);
 extern void run_detector(int argc, char **argv);
 extern void run_coco(int argc, char **argv);
@@ -432,9 +436,18 @@ int main(int argc, char **argv)
     } else if (0 == strcmp(argv[1], "detect")){
         float thresh = find_float_arg(argc, argv, "-thresh", .5);
         char *filename = (argc > 4) ? argv[4]: 0;
+        char *filename1 = (argc > 4) ? argv[4]: 0;
+        char *filename2 = (argc > 5) ? argv[5]: 0;
+        //char *outfile1 = find_char_arg(argc, argv, "-out", 0);
+        //char *outfile2 = find_char_arg(argc, argv, "r1", 0);
         char *outfile = find_char_arg(argc, argv, "-out", 0);
         int fullscreen = find_arg(argc, argv, "-fullscreen");
-        test_detector("cfg/coco.data", argv[2], argv[3], filename, thresh, .5, outfile, fullscreen);
+        //test_detector("cfg/coco.data", argv[2], argv[3], filename, thresh, .5, outfile, fullscreen);
+        //directory_detector("cfg/coco.data", argv[2], argv[3], "/Users/User-PC/RA/pjreddie/data/images", thresh, .5, outfile, fullscreen);
+        //test_detector("cfg/coco.data", argv[2], argv[3], filename, thresh, .5, outfile, fullscreen);
+        //test_detector_new_onefile("cfg/coco.data", argv[2], argv[3], filename, thresh, .5, outfile, fullscreen);
+        test_detector_new_twofiles("cfg/coco.data", argv[2], argv[3], filename1, filename2, thresh, .5, outfile, fullscreen);
+        //test_detector_3("cfg/coco.data", argv[2], argv[3], filename1, filename2, thresh, .5, outfile1, outfile2, fullscreen);
     } else if (0 == strcmp(argv[1], "cifar")){
         run_cifar(argc, argv);
     } else if (0 == strcmp(argv[1], "go")){
